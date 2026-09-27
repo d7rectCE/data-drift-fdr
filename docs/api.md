@@ -3,7 +3,7 @@
 Generated from the docstrings by `python docs/gen_api.py`; do not edit by hand.
 Everything listed under `driftfdr.__all__` can be imported from the top-level package.
 
-Top-level exports: `ADWIN`, `AlphaInvesting`, `BHWindow`, `BatchBH`, `BonferroniWindow`, `CalibratedDetector`, `CalibrationConfig`, `DDM`, `Detector`, `EBHWindow`, `ECUSUM`, `KSSliding`, `KSWindow`, `LOND`, `LORDpp`, `MeanShift`, `MonitorConfig`, `MonitorResult`, `NullDistribution`, `PageHinkley`, `Prewhitened`, `RawThreshold`, `SAFFRON`, `Scenario`, `ScenarioConfig`, `StoreyBHWindow`, `StreamingMonitor`, `SupervisedConfig`, `Uncorrected`, `ar_whiten`, `benchmark_suite`, `bucket_means`, `calibrate`, `calibrate_many`, `default_detectors`, `from_river`, `make_procedure`, `make_scenario`, `make_supervised_scenario`, `run_monitor`, `split_common`, `summarize`, `tolerance_from_cost`.
+Top-level exports: `ADWIN`, `AlphaInvesting`, `BHWindow`, `BatchBH`, `BonferroniWindow`, `CalibratedDetector`, `CalibrationConfig`, `DDM`, `Detector`, `EBHWindow`, `ECUSUM`, `KSSliding`, `KSWindow`, `LOND`, `LORDpp`, `MeanShift`, `MonitorConfig`, `MonitorResult`, `NullDistribution`, `PageHinkley`, `Prewhitened`, `RawThreshold`, `Rule`, `SAFFRON`, `Scenario`, `ScenarioConfig`, `StoreyBHWindow`, `StreamingMonitor`, `SupervisedConfig`, `Uncorrected`, `ar_whiten`, `benchmark_suite`, `bucket_means`, `calibrate`, `calibrate_many`, `default_detectors`, `from_river`, `make_procedure`, `make_scenario`, `make_supervised_scenario`, `run_monitor`, `split_common`, `summarize`, `tolerance_from_cost`.
 
 ## Contents
 
@@ -839,13 +839,26 @@ Foster–Stine alpha-investing (mFDR control) with the ``W / (1 + t - k*)`` spen
 
   Record the outcome of the hypothesis just tested.
 
+### `Rule` (str, Enum)
+
+```python
+Rule(value, names=None, *, module=None, qualname=None, type=None, start=1, boundary=None)
+```
+
+Names of the decision rules, for autocompletion instead of strings.
+
+``StreamingMonitor(procedure=Rule.BH_WINDOW)`` is the same as ``procedure="bh_window"``.
+
 ### `make_procedure`
 
 ```python
-make_procedure(name: str, alpha: float = 0.05) -> Procedure
+make_procedure(name, alpha: float = 0.05) -> Procedure
 ```
 
-A fresh procedure by name: one of the keys of ``PROCEDURES``.
+A fresh procedure by name: a ``Rule`` or one of the keys of ``PROCEDURES``.
+
+Names are matched ignoring case, ``-``, ``_`` and spaces (``"lord++"``,
+``"BH-window"`` work); an unknown name raises ``ValueError`` listing the valid ones.
 
 ## `driftfdr.preprocess`
 
@@ -1125,6 +1138,24 @@ Monitored signals of every stream plus the ground truth needed to score alarms.
 | `truth_ref` | `np.ndarray | None` | `None` | Optional level used for the reference side of the oracle comparison (defaults to ``truth``). |
 | `mean_shift` | `np.ndarray | None` | `None` | True mean shift of every stream (synthetic scenarios only). |
 | `features` | `np.ndarray | None` | `None` | Model input of every stream, for detectors that watch p(X) (supervised scenarios). |
+
+- **`from_arrays(values, errors=None, change_points=None, truth=None, truth_ref=None, tolerance: float = 0.0, names=None) -> Scenario`** *(classmethod)* 
+
+  Scenario from your own data, for ``run_monitor`` and the metrics.
+
+  * ``values``: ``(n_streams, n_steps)`` signal of every model (its error or loss).
+  * ``errors``: 0/1 errors for detectors that need them (DDM); defaults to ``values``.
+  * ``change_points``: known changes, if any. Per stream either ``None`` (no change),
+    a step ``t`` (abrupt change) or a pair ``(start, end)`` (gradual change), or a
+    list of those for several changes. Give one entry per stream, or a dict
+    ``{stream: changes}`` for the streams that change. Without it, every test is null
+    unless ``truth`` is set.
+  * ``truth`` (with ``tolerance``): an oracle level of the monitored quantity, e.g.
+    ``datasets.forward_error(errors, span)``; a test is then null iff the level rose
+    by at most ``tolerance`` (the material-degradation null, see
+    ``with_material_null``). ``truth_ref`` is the level on the reference side
+    (defaults to ``truth``).
+  * ``names``: a label per stream, kept in ``drift_kind``.
 
 - **`with_material_null(tolerance: float, truth: np.ndarray | None = None, truth_ref: np.ndarray | None = None) -> Scenario`** 
 

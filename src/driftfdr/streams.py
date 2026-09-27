@@ -82,6 +82,69 @@ class Scenario:
     features: np.ndarray | None = field(default=None, repr=False)
     """Model input of every stream, for detectors that watch p(X) (supervised scenarios)."""
 
+    @classmethod
+    def from_arrays(
+        cls,
+        values,
+        errors=None,
+        change_points=None,
+        truth=None,
+        truth_ref=None,
+        tolerance: float = 0.0,
+        names=None,
+    ) -> "Scenario":
+        """Scenario from your own data, for ``run_monitor`` and the metrics.
+
+        * ``values``: ``(n_streams, n_steps)`` signal of every model (its error or loss).
+        * ``errors``: 0/1 errors for detectors that need them (DDM); defaults to ``values``.
+        * ``change_points``: known changes, if any. Per stream either ``None`` (no change),
+          a step ``t`` (abrupt change) or a pair ``(start, end)`` (gradual change), or a
+          list of those for several changes. Give one entry per stream, or a dict
+          ``{stream: changes}`` for the streams that change. Without it, every test is null
+          unless ``truth`` is set.
+        * ``truth`` (with ``tolerance``): an oracle level of the monitored quantity, e.g.
+          ``datasets.forward_error(errors, span)``; a test is then null iff the level rose
+          by at most ``tolerance`` (the material-degradation null, see
+          ``with_material_null``). ``truth_ref`` is the level on the reference side
+          (defaults to ``truth``).
+        * ``names``: a label per stream, kept in ``drift_kind``.
+        """
+        values = np.atleast_2d(np.asarray(values, dtype=float))
+        n, T = values.shape
+        errors = values if errors is None else np.atleast_2d(np.asarray(errors))
+        if errors.shape != values.shape:
+            raise ValueError(f"errors have shape {errors.shape}, values {values.shape}")
+        per_stream = [[] for _ in range(n)]
+        if change_points is not None:
+            items = change_points.items() if isinstance(change_points, dict) else enumerate(change_points)
+            if not isinstance(change_points, dict) and len(change_points) != n:
+                raise ValueError(f"change_points has {len(change_points)} entries for {n} streams")
+            for k, c in items:
+                if c is None or (np.isscalar(c) and (np.isnan(c) if isinstance(c, float) else False)):
+                    continue
+                entries = [c] if np.isscalar(c) or (isinstance(c, tuple) and len(c) == 2 and np.isscalar(c[0])) else c
+                for e in entries:
+                    start, end = (int(e), int(e)) if np.isscalar(e) else (int(e[0]), int(e[1]))
+                    if not 0 <= start <= end <= T:
+                        raise ValueError(f"change {e!r} of stream {k} is outside 0..{T}")
+                    per_stream[int(k)].append((start, end))
+        m = max((len(c) for c in per_stream), default=0)
+        pairs = np.full((n, max(m, 1), 2), NO_CHANGE, dtype=np.int64)
+        for k, c in enumerate(per_stream):
+            for i, (a, b) in enumerate(sorted(c)):
+                pairs[k, i] = (a, b)
+        first = pairs[:, 0]
+        config = ScenarioConfig(n_streams=n, n_steps=T, phi=np.nan, rho=np.nan, drift_fraction=np.nan)
+        kind = np.array([str(v) for v in names], dtype=object) if names is not None else np.where(
+            first[:, 0] < NO_CHANGE, "change", "none").astype(object)
+        if len(kind) != n:
+            raise ValueError(f"names has {len(kind)} entries for {n} streams")
+        sc = cls(config, values, errors, change_start=first[:, 0].copy(), change_end=first[:, 1].copy(),
+                 drift_kind=kind, event=np.full(n, -1), later_changes=pairs[:, 1:] if m > 1 else None)
+        if truth is not None:
+            sc = sc.with_material_null(tolerance, truth=truth, truth_ref=truth_ref)
+        return sc
+
     def with_material_null(
         self, tolerance: float, truth: np.ndarray | None = None, truth_ref: np.ndarray | None = None
     ) -> "Scenario":

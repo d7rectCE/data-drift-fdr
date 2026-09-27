@@ -6,6 +6,7 @@ from driftfdr import (
     MonitorConfig,
     PageHinkley,
     RawThreshold,
+    Scenario,
     ScenarioConfig,
     Uncorrected,
     make_procedure,
@@ -136,3 +137,33 @@ def test_supervised_scenario_separates_virtual_and_real_drift():
     k = np.flatnonzero(sc.drift_kind == "cyclic")[0]
     cs, _ = sc.changes()
     assert (cs[k] < 10**9).sum() >= 2
+
+
+def test_scenario_from_arrays_supports_run_monitor_and_metrics():
+    rng = np.random.default_rng(5)
+    values = rng.normal(size=(4, 1500))
+    values[1, 800:] += 2.0
+    values[2, 600:900] += np.linspace(0, 2, 300)
+    values[2, 900:] += 2.0
+    sc = Scenario.from_arrays(values, change_points=[None, 800, (600, 900), None], names=list("abcd"))
+    assert sc.drifting.tolist() == [1, 2] and sc.change_end[2] == 900 and list(sc.drift_kind) == list("abcd")
+    res = run_monitor(sc, PageHinkley(), make_procedure("bonferroni", 0.05), CONFIG, seed=0)
+    s = summarize(res)
+    assert s["n_drifts"] == 2 and s["detected"] == 2
+
+    several = Scenario.from_arrays(values, change_points={1: [300, 800]})
+    assert several.changes()[0][1].tolist() == [300, 800]
+    with pytest.raises(ValueError):
+        Scenario.from_arrays(values, change_points=[5000, None, None, None])
+    with_truth = Scenario.from_arrays(values, truth=values, tolerance=0.5)
+    assert with_truth.tolerance == 0.5 and with_truth.truth is not None
+
+
+def test_procedure_names_are_forgiving_and_errors_list_valid_names():
+    from driftfdr import Rule
+
+    assert make_procedure("lord++").name == "LORD++"
+    assert make_procedure(Rule.BH_WINDOW, 0.1).alpha == 0.1
+    assert make_procedure("Alpha_Investing").name == "alpha-investing"
+    with pytest.raises(ValueError, match="Did you mean 'bh_window'.*Valid names"):
+        make_procedure("bh_windw")

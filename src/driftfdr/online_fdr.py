@@ -15,7 +15,9 @@ Javanmard & Montanari (2018), Ramdas et al. (2017, LORD++), Ramdas et al.
 
 from __future__ import annotations
 
+import difflib
 from abc import ABC, abstractmethod
+from enum import Enum
 
 import numpy as np
 
@@ -345,6 +347,43 @@ PROCEDURES = {
 }
 
 
-def make_procedure(name: str, alpha: float = 0.05) -> Procedure:
-    """A fresh procedure by name: one of the keys of ``PROCEDURES``."""
-    return PROCEDURES[name](alpha)
+class Rule(str, Enum):
+    """Names of the decision rules, for autocompletion instead of strings.
+
+    ``StreamingMonitor(procedure=Rule.BH_WINDOW)`` is the same as ``procedure="bh_window"``.
+    """
+
+    UNCORRECTED = "uncorrected"
+    BONFERRONI = "bonferroni"
+    BH_WINDOW = "bh_window"
+    STOREY_BH = "storey_bh"
+    E_BH = "e_bh"
+    BATCH_BH = "BatchBH"
+    LOND = "LOND"
+    LORD_PP = "LORD++"
+    SAFFRON = "SAFFRON"
+    ALPHA_INVESTING = "alpha-investing"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+def _normalise(name: str) -> str:
+    return str(name).lower().replace("-", "").replace("_", "").replace(" ", "")
+
+
+def make_procedure(name, alpha: float = 0.05) -> Procedure:
+    """A fresh procedure by name: a ``Rule`` or one of the keys of ``PROCEDURES``.
+
+    Names are matched ignoring case, ``-``, ``_`` and spaces (``"lord++"``,
+    ``"BH-window"`` work); an unknown name raises ``ValueError`` listing the valid ones.
+    """
+    key = name.value if isinstance(name, Rule) else str(name)
+    if key not in PROCEDURES:
+        matches = [k for k in PROCEDURES if _normalise(k) == _normalise(key)]
+        if len(matches) != 1:
+            close = difflib.get_close_matches(key, list(PROCEDURES), n=1)
+            hint = f" Did you mean {close[0]!r}?" if close else ""
+            raise ValueError(f"unknown procedure {name!r}.{hint} Valid names: {', '.join(PROCEDURES)}")
+        key = matches[0]
+    return PROCEDURES[key](alpha)

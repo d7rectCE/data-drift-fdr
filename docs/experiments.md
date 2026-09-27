@@ -926,6 +926,13 @@ Tables: `results/exp24_tables.md`. Running it requires `pip install nannyml rive
 - Decisions are made only at the end of a window. In the streaming monitor each model has its own
   clock, but in `split_common` mode every model must report at every step; irregular events are
   reduced to steps with `bucket_means`.
+- With a tolerance δ > 0 the level α holds at the boundary of the null; when the error did not
+  rise at all the false-alarm rate is far below α (0.3% instead of 5% on 0/1 errors in a check
+  with MeanShift(1), 300-step reference, window 100): conservative by design.
+- On rare events (error rate 0.05) and Poisson counts the calibration is slightly
+  anti-conservative at small levels: 2.5% instead of 1% at α = 0.01, 5–7% at α = 0.05.
+- LORD++ with its default sequence γ spends 21% of α over the first 100 tests, 30% over 1000 and
+  52% over a million: too little on short series, and ever smaller levels on long ones.
 - On a noisy signal only material degradations are caught: on FX rates a rise of the loss below
   ~15% is indistinguishable from the noise of a window (exp. 22).
 

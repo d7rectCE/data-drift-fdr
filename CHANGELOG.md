@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.1
+
+- `Scenario.from_arrays(values, errors=None, change_points=None, truth=None, tolerance=0, names=None)`:
+  build a scenario from your own data without the internal conventions (`NO_CHANGE`, events,
+  `dataclasses.replace`); change points can be steps, `(start, end)` pairs or lists of them.
+- `Rule` enum for the decision rules (`Rule.BONFERRONI`, `Rule.BH_WINDOW`, …); `make_procedure`
+  ignores case, `-` and `_`, and an unknown name raises a `ValueError` that suggests the closest
+  name and lists the valid ones.
+- Documented limitations: the tolerance test is conservative by design when the error does not rise
+  (0.3% instead of 5% on 0/1 errors; α holds at the boundary of the null); slight
+  anti-conservativeness on rare events and counts at small levels (2.5% at α = 0.01); LORD++ with
+  its default sequence spends 21% of α over the first 100 tests.
+
 ## 0.1.0 — first release
 
 - **Detectors as calibrated scores:** Page-Hinkley and DDM matching river exactly, ADWIN,

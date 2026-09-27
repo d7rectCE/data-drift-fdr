@@ -104,6 +104,28 @@ monitor = StreamingMonitor.load("monitor.npz", detector_factory=lambda: MeanShif
 
 ![Demo](https://raw.githubusercontent.com/d7rectCE/data-drift-fdr/main/results/figures/demo.png)
 
+### Evaluating on your own data
+
+To replay historical data and score the alarms, build a `Scenario` from your arrays:
+
+```python
+from driftfdr import MeanShift, MonitorConfig, Rule, Scenario, make_procedure, run_monitor, summarize
+from driftfdr.datasets import forward_error
+
+scenario = Scenario.from_arrays(
+    losses,                                   # (n_models, n_steps)
+    change_points=[None, 1200, (800, 1100)],  # known changes per model, if any: a step or (start, end)
+    names=["pricing", "eta", "demand"],
+)
+# without labelled changes, judge alarms by the future error instead:
+# Scenario.from_arrays(losses, truth=forward_error(losses, 1000), tolerance=0.05)
+result = run_monitor(scenario, MeanShift(3), make_procedure(Rule.BONFERRONI, 0.05), MonitorConfig())
+print(summarize(result))                      # FDR, delays, misses, precision / recall / F1, ...
+```
+
+Rules can be given as `Rule.BONFERRONI`, `Rule.BH_WINDOW`, … or as strings; names ignore case and
+`-`/`_`, and an unknown name lists the valid ones.
+
 ### Integrations
 
 Optional adapters in `driftfdr.integrations`; each needs its own extra and nothing else changes.
@@ -158,6 +180,14 @@ The method: [docs/method.md](https://github.com/d7rectCE/data-drift-fdr/blob/mai
   starts a new reference).
 - The corrections' guarantees assume independent p-values; with strongly correlated models
   Bonferroni is the safer choice.
+- With a tolerance δ > 0 the level α holds at the boundary of the null (the error rose by exactly
+  δ); when the error did not rise at all, far fewer alarms occur (0.3% instead of 5% on 0/1
+  errors). This is conservative by design, not a calibration error.
+- On rare events and counts the calibration is slightly anti-conservative at small levels: 2.5%
+  instead of 1% at α = 0.01 (error rate 0.05, or Poisson counts); at α = 0.05 it is 5–7%.
+- LORD++ with its default sequence spends only 21% of its α over the first 100 tests and 30% over
+  1000: on short series it barely rejects, on long ones its levels become tiny. Use Bonferroni or
+  BH within a window.
 - On noisy signals (for example, the daily loss of FX volatility models) only material
   degradations are caught: rises of less than ~15% are indistinguishable from noise (exp. 22).
 - The full list is in [docs/experiments.md](https://github.com/d7rectCE/data-drift-fdr/blob/main/docs/experiments.md#limitations).
@@ -180,7 +210,7 @@ src/driftfdr/
 experiments/       24 experiments (exp1…exp24)
 results/           tables and figures of the experiments, the demo page
 docs/              method, related work, experiment log (English and *.ru.md), API reference (generated: python docs/gen_api.py)
-tests/             83 tests (CI on Python 3.10–3.12): agreement with river, bootstrap, calibration, procedures, streaming
+tests/             85 tests (CI on Python 3.10–3.12): agreement with river, bootstrap, calibration, procedures, streaming
 examples/          online monitoring, the replayable demo, a Prometheus service with alert rules
 ```
 
@@ -303,6 +333,28 @@ monitor = StreamingMonitor.load("monitor.npz", detector_factory=lambda: MeanShif
 
 ![Демонстрация](https://raw.githubusercontent.com/d7rectCE/data-drift-fdr/main/results/figures/demo.png)
 
+### Оценка на своих данных
+
+Чтобы прогнать исторические данные и оценить тревоги, соберите `Scenario` из своих массивов:
+
+```python
+from driftfdr import MeanShift, MonitorConfig, Rule, Scenario, make_procedure, run_monitor, summarize
+from driftfdr.datasets import forward_error
+
+scenario = Scenario.from_arrays(
+    losses,                                   # (n_models, n_steps)
+    change_points=[None, 1200, (800, 1100)],  # известные изменения по моделям: шаг или (начало, конец)
+    names=["pricing", "eta", "demand"],
+)
+# без размеченных изменений тревоги оцениваются по будущей ошибке:
+# Scenario.from_arrays(losses, truth=forward_error(losses, 1000), tolerance=0.05)
+result = run_monitor(scenario, MeanShift(3), make_procedure(Rule.BONFERRONI, 0.05), MonitorConfig())
+print(summarize(result))                      # FDR, задержки, пропуски, точность / полнота / F1, ...
+```
+
+Правила можно задавать как `Rule.BONFERRONI`, `Rule.BH_WINDOW`, … или строками; регистр и `-`/`_`
+не важны, а при неизвестном имени сообщение перечисляет допустимые.
+
 ### Интеграции
 
 Опциональные адаптеры в `driftfdr.integrations`; каждому нужна своя дополнительная зависимость,
@@ -357,6 +409,14 @@ monitor = StreamingMonitor.load("monitor.npz", detector_factory=lambda: MeanShif
   сбор нового опорного отрезка).
 - Гарантии поправок выведены для независимых p-значений; при сильно коррелированных моделях
   надёжнее Бонферрони.
+- С допуском δ > 0 уровень α выдерживается на границе нулевой гипотезы (ошибка выросла ровно на δ);
+  когда ошибка не выросла вовсе, тревог гораздо меньше (0.3% вместо 5% на ошибках 0/1). Это
+  консервативность по построению, а не ошибка калибровки.
+- На редких событиях и счётчиках калибровка слегка антиконсервативна на малых уровнях: 2.5% вместо
+  1% при α = 0.01 (доля ошибок 0.05 или пуассоновские счётчики); при α = 0.05 — 5–7%.
+- LORD++ с последовательностью по умолчанию тратит лишь 21% своего α на первые 100 проверок и 30%
+  на 1000: на коротких рядах он почти не отвергает, на длинных его уровни становятся крошечными.
+  Берите Бонферрони или BH в окне.
 - На шумном сигнале (например, дневная потеря моделей волатильности на курсах валют) ловятся
   только существенные ухудшения: рост меньше ~15% неотличим от шума (эксп. 22).
 - Полный список — в [docs/experiments.ru.md](https://github.com/d7rectCE/data-drift-fdr/blob/main/docs/experiments.ru.md#ограничения).
@@ -379,7 +439,7 @@ src/driftfdr/
 experiments/       24 эксперимента (exp1…exp24)
 results/           таблицы и графики экспериментов, страница демонстрации
 docs/              метод, связанные работы, журнал экспериментов (английский и *.ru.md), справочник API (генерируется: python docs/gen_api.py)
-tests/             83 теста (CI на Python 3.10–3.12): совпадение с river, бутстреп, калибровка, процедуры, потоковый режим
+tests/             85 тестов (CI на Python 3.10–3.12): совпадение с river, бутстреп, калибровка, процедуры, потоковый режим
 examples/          онлайн-мониторинг, демонстрация с проигрыванием, сервис для Prometheus с правилами алертов
 ```
 
