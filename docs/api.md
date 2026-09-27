@@ -841,13 +841,22 @@ Foster–Stine alpha-investing (mFDR control) with the ``W / (1 + t - k*)`` spen
 
 ### `Rule` (str, Enum)
 
-```python
-Rule(value, names=None, *, module=None, qualname=None, type=None, start=1, boundary=None)
-```
-
 Names of the decision rules, for autocompletion instead of strings.
 
 ``StreamingMonitor(procedure=Rule.BH_WINDOW)`` is the same as ``procedure="bh_window"``.
+
+| member | value |
+|---|---|
+| `Rule.UNCORRECTED` | `'uncorrected'` |
+| `Rule.BONFERRONI` | `'bonferroni'` |
+| `Rule.BH_WINDOW` | `'bh_window'` |
+| `Rule.STOREY_BH` | `'storey_bh'` |
+| `Rule.E_BH` | `'e_bh'` |
+| `Rule.BATCH_BH` | `'BatchBH'` |
+| `Rule.LOND` | `'LOND'` |
+| `Rule.LORD_PP` | `'LORD++'` |
+| `Rule.SAFFRON` | `'SAFFRON'` |
+| `Rule.ALPHA_INVESTING` | `'alpha-investing'` |
 
 ### `make_procedure`
 

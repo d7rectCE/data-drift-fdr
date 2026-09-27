@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import enum
 import importlib
 import inspect
 import textwrap
@@ -93,6 +94,12 @@ def public_members(cls):
 def render_class(cls, fdocs: dict[str, str]) -> list[str]:
     bases = [b.__name__ for b in cls.__bases__ if b is not object]
     head = f"### `{cls.__name__}`" + (f" ({', '.join(bases)})" if bases else "")
+    if issubclass(cls, enum.Enum):  # the Enum constructor's signature differs between Python versions
+        lines = [head, ""]
+        if cls.__doc__:
+            lines += [inspect.cleandoc(cls.__doc__), ""]
+        lines += ["| member | value |", "|---|---|", *[f"| `{cls.__name__}.{m.name}` | `{m.value!r}` |" for m in cls], ""]
+        return lines + [""]
     lines = [head, "", f"```python\n{signature(cls, cls.__name__)}\n```", ""]
     if cls.__doc__:
         lines += [inspect.cleandoc(cls.__doc__), ""]
